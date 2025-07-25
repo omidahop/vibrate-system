@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#2563eb">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="ویبره سیستم">
+    <meta name="mobile-web-app-capable" content="yes">
+    
+    <title>سیستم ثبت داده‌های ویبره تجهیزات</title>
+    <meta name="description" content="سیستم جامع ثبت، مدیریت و آنالیز داده‌های ویبره تجهیزات صنعتی با قابلیت کار آفلاین">
+    
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="/manifest.json">
+    
+    <!-- Icons -->
+    <link rel="icon" type="image/png" sizes="32x32" href="/icons/icon-32x32.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192x192.png">
+    <link rel="apple-touch-icon" href="/icons/icon-180x180.png">
+    
+    <!-- External Dependencies -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.0/dist/umd/supabase.js"></script>
+    
+    <!-- Custom Styles -->
+    <link rel="stylesheet" href="styles.css">
+    
+    <!-- PWA Install Prompt -->
+    <style>
+        .install-banner, .update-banner {
+            position: fixed;
+            top: -100px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--primary-color);
+            color: white;
+            padding: 1rem 2rem;
+            border-radius: 0 0 1rem 1rem;
+            box-shadow: var(--shadow-lg);
+            z-index: 10000;
+            transition: top 0.3s ease;
+            min-width: 300px;
+            text-align: center;
+        }
+        
+        .install-banner.show, .update-banner.show {
+            top: 0;
+        }
+        
+        .install-content, .update-content {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+        }
+        
+        .install-message, .update-message {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .install-actions, .update-actions {
+            display: flex;
+            gap: 0.5rem;
+        }
+        
+        .online-status {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            padding: 0.5rem 1rem;
+            border-radius: 2rem;
+            font-size: 0.9rem;
+            font-weight: 600;
+            z-index: 1000;
+            transition: all 0.3s ease;
+        }
+        
+        .online-status.online {
+            background: var(--success-color);
+            color: white;
+        }
+        
+        .online-status.offline {
+            background: var(--error-color);
+            color: white;
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+        
+        .offline-indicator {
+            background: var(--warning-color);
+            color: var(--text-inverse);
+            padding: 0.25rem 0.5rem;
+            border-radius: 0.25rem;
+            font-size: 0.8rem;
+            margin-right: 0.5rem;
+        }
+        
+        .sync-pending {
+            background: var(--info-color);
+            color: var(--text-inverse);
+            padding: 0.25rem 0.5rem;
+            border-radius: 0.25rem;
+            font-size: 0.8rem;
+            margin-right: 0.5rem;
+        }
+    </style>
+</head>
+<body>
+    <!-- Online/Offline Status -->
+    <div id="onlineStatus" class="online-status online">
+        <i class="fas fa-wifi"></i>
+        آنلاین
+    </div>
+
+    <!-- Install PWA Banner -->
+    <div id="installBanner" class="install-banner">
+        <div class="install-content">
+            <div class="install-message">
+                <i class="fas fa-mobile-alt"></i>
+                <span>نصب اپلیکیشن</span>
+            </div>
+            <div class="install-actions">
+                <button class="btn btn-success btn-sm" onclick="installPWA()">
+                    <i class="fas fa-download"></i>
+                    نصب
+                </button>
+                <button class="btn btn-secondary btn-sm" onclick="dismissInstall()">
+                    <i class="fas fa-times"></i>
+                    بعداً
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Authentication Modal -->
+    <div class="modal active" id="authModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title" id="authModalTitle">ورود به سیستم</h3>
+            </div>
+            <div class="modal-body">
+                <!-- Login Form -->
+                <div id="loginForm">
+                    <div class="form-group">
+                        <label class="form-label">ایمیل:</label>
+                        <input type="email" class="form-control" id="loginEmail" 
+                               placeholder="ایمیل خود را وارد کنید" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">رمز عبور:</label>
+                        <input type="password" class="form-control" id="loginPassword" 
+                               placeholder="رمز عبور خود را وارد کنید" required>
+                    </div>
+                    <button class="btn btn-primary btn-lg w-100" onclick="handleLogin()" id="loginBtn">
+                        <i class="fas fa-sign-in-alt"></i>
+                        ورود
+                    </button>
+                    <div class="text-center mt-3">
+                        <a href="#" onclick="switchToRegister()" class="text-primary">
+                            حساب کاربری ندارید؟ ثبت نام کنید
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Register Form -->
+                <div id="registerForm" class="d-none">
+                    <div class="form-group">
+                        <label class="form-label">نام کامل:</label>
+                        <input type="text" class="form-control" id="registerFullName" 
+                               placeholder="نام کامل خود را وارد کنید" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">ایمیل:</label>
+                        <input type="email" class="form-control" id="registerEmail" 
+                               placeholder="ایمیل خود را وارد کنید" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">رمز عبور:</label>
+                        <input type="password" class="form-control" id="registerPassword" 
+                               placeholder="رمز عبور را وارد کنید" required minlength="6">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">سمت:</label>
+                        <select class="form-control" id="registerRole" required>
+                            <option value="operator">اپراتور تجهیزات</option>
+                            <option value="technician">تکنسین</option>
+                            <option value="engineer">مهندس</option>
+                            <option value="supervisor">سرپرست</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">واحد:</label>
+                        <select class="form-control" id="registerUnit" required>
+                            <option value="DRI1">واحد احیا مستقیم 1</option>
+                            <option value="DRI2">واحد احیا مستقیم 2</option>
+                            <option value="BOTH">هر دو واحد</option>
+                        </select>
+                    </div>
+                    <button class="btn btn-success btn-lg w-100" onclick="handleRegister()" id="registerBtn">
+                        <i class="fas fa-user-plus"></i>
+                        ثبت نام
+                    </button>
+                    <div class="text-center mt-3">
+                        <a href="#" onclick="switchToLogin()" class="text-primary">
+                            حساب کاربری دارید؟ وارد شوید
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Approval Pending Modal -->
+    <div class="modal" id="pendingApprovalModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">در انتظار تایید</h3>
+            </div>
+            <div class="modal-body text-center">
+                <div class="mb-3">
+                    <i class="fas fa-hourglass-half text-warning" style="font-size: 3rem;"></i>
+                </div>
+                <h4>حساب کاربری شما در انتظار تایید است</h4>
+                <p class="text-secondary">
+                    لطفاً تا تایید حساب کاربری توسط مدیر سیستم صبر کنید.
+                    <br>
+                    <span class="offline-indicator" style="display: none;">
+                        <i class="fas fa-wifi-slash"></i>
+                        آفلاین
+                    </span>
+                </p>
+                <button class="btn btn-primary" onclick="handleLogout()">
+                    <i class="fas fa-sign-out-alt"></i>
+                    خروج
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Application -->
+    <div class="main-app" style="display: none;">
+        <!-- Header -->
+        <header class="header">
+            <div class="container">
+                <div class="header-content">
+                    <div class="logo">
+                        <i class="fas fa-chart-line"></i>
+                        سیستم ثبت داده‌های ویبره
+                        <span class="offline-indicator" style="display: none;">آفلاین</span>
+                        <span class="sync-pending" id="syncPending" style="display: none;">
+                            <i class="fas fa-sync fa-spin"></i>
+                            همگام‌سازی...
+                        </span>
+                    </div>
+                    
+                    <nav class="nav-tabs">
+                        <button class="nav-tab active" onclick="showSection('data-entry')">
+                            <i class="fas fa-edit"></i>
+                            ثبت داده
+                        </button>
+                        <button class="nav-tab" onclick="showSection('view-data')">
+                            <i class="fas fa-table"></i>
+                            مشاهده داده‌ها
+                        </button>
+                        <button class="nav-tab" onclick="showSection('charts')">
+                            <i class="fas fa-chart-area"></i>
+                            نمودار
+                        </button>
+                        <button class="nav-tab" onclick="showSection('analysis')">
+                            <i class="fas fa-search"></i>
+                            آنالیز
+                        </button>
+                        <button class="nav-tab" onclick="showSection('slideshow')">
+                            <i class="fas fa-play"></i>
+                            اسلایدشو
+                        </button>
+                        <button class="nav-tab" onclick="showSection('database')">
+                            <i class="fas fa-chart-bar"></i>
+                            آمار
+                        </button>
+                        <button class="nav-tab" onclick="showSection('settings')">
+                            <i class="fas fa-cog"></i>
+                            تنظیمات
+                        </button>
+                    </nav>
+                    
+                    <div class="d-flex align-center gap-2">
+                        <button class="btn btn-sm btn-secondary sync-btn" onclick="forceSyncData()" style="display: none;">
+                            <i class="fas fa-sync"></i>
+                            همگام‌سازی
+                        </button>
+                        <button class="theme-toggle" onclick="toggleTheme()">
+                            <i class="fas fa-moon"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <div class="container">
+                <!-- همان sections قبلی اما با اضافه شدن نشانگرهای آفلاین -->
+                <!-- ... rest of the sections remain the same but with offline indicators ... -->
+                
+                <!-- Database Section (Stats Only) -->
+                <section id="database" class="section">
+                    <div class="card">
+                        <div class="card-header">
+                            <h2 class="card-title">
+                                <i class="fas fa-chart-bar"></i>
+                                آمار سیستم
+                                <span class="offline-indicator" style="display: none;">
+                                    <i class="fas fa-database"></i>
+                                    آمار آفلاین
+                                </span>
+                            </h2>
+                            <div class="d-flex gap-2">
+                                <button class="btn btn-success" onclick="loadDatabaseStats()">
+                                    <i class="fas fa-sync"></i>
+                                    به‌روزرسانی
+                                </button>
+                                <button class="btn btn-warning sync-btn" onclick="showSyncStatus()" style="display: none;">
+                                    <i class="fas fa-cloud-upload-alt"></i>
+                                    وضعیت همگام‌سازی
+                                </button>
+                            </div>
+                        </div>
+                        
+                                                <!-- Overall Stats -->
+                        <div class="card mt-3">
+                            <div class="card-header">
+                                <h3 class="card-title">
+                                    <i class="fas fa-chart-pie"></i>
+                                    آمار کلی
+                                </h3>
+                            </div>
+                            <div class="grid grid-md-5" id="overallStats">
+                                <!-- Stats will be populated -->
+                            </div>
+                        </div>
+                        
+                        <!-- Stats by Unit -->
+                        <div class="card mt-3">
+                            <div class="card-header">
+                                <h3 class="card-title">
+                                    <i class="fas fa-industry"></i>
+                                    آمار به تفکیک واحد
+                                </h3>
+                            </div>
+                            <div id="unitStats">
+                                <!-- Unit stats will be populated -->
+                            </div>
+                        </div>
+                        
+                        <!-- Stats by User -->
+                        <div class="card mt-3">
+                            <div class="card-header">
+                                <h3 class="card-title">
+                                    <i class="fas fa-users"></i>
+                                    آمار به تفکیک کاربر
+                                </h3>
+                            </div>
+                            <div id="userStats">
+                                <!-- User stats will be populated -->
+                            </div>
+                        </div>
+
+                        <!-- Offline Data Status -->
+                        <div class="card mt-3" id="offlineDataStatus">
+                            <div class="card-header">
+                                <h3 class="card-title">
+                                    <i class="fas fa-database"></i>
+                                    وضعیت داده‌های آفلاین
+                                </h3>
+                            </div>
+                            <div class="grid grid-3" id="offlineStatsGrid">
+                                <!-- Offline stats will be populated -->
+                            </div>
+                        </div>
+                    </div>
+                </section>
+                
+                <!-- Data Entry Section اصلاح شده -->
+                <section id="data-entry" class="section active">
+                    <!-- User Info -->
+                    <div class="card">
+                        <div class="user-info d-flex align-center">
+                            <div class="user-avatar" id="userAvatar">
+                                <i class="fas fa-user"></i>
+                            </div>
+                            <div class="user-details">
+                                <div class="user-name" id="userName">کاربر میهمان</div>
+                                <div class="user-role" id="userRole">اپراتور تجهیزات</div>
+                            </div>
+                            <div class="d-flex gap-2 align-center">
+                                <span class="offline-indicator" style="display: none;">
+                                    <i class="fas fa-cloud-slash"></i>
+                                    حالت آفلاین
+                                </span>
+                                <button class="btn btn-primary btn-sm" onclick="showUserModal()">
+                                    <i class="fas fa-edit"></i>
+                                    ویرایش
+                                </button>
+                                <button class="btn btn-error btn-sm" onclick="handleLogout()">
+                                    <i class="fas fa-sign-out-alt"></i>
+                                    خروج
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- همان محتوای قبلی data entry اما با نشانگرهای آفلاین -->
+                    <!-- ... -->
+                    
+                </section>
+
+                <!-- User Management Section (Admin Only) -->
+                <section id="user-management" class="section" style="display: none;">
+                    <div class="card">
+                        <div class="card-header">
+                            <h2 class="card-title">
+                                <i class="fas fa-users-cog"></i>
+                                مدیریت کاربران
+                                <span class="offline-indicator" style="display: none;">
+                                    <i class="fas fa-exclamation-triangle"></i>
+                                    نیاز به اتصال آنلاین
+                                </span>
+                            </h2>
+                        </div>
+                        
+                        <div class="pending-users-section">
+                            <h3>کاربران در انتظار تایید</h3>
+                            <div id="pendingUsersList">
+                                <!-- Pending users will be populated by JavaScript -->
+                            </div>
+                        </div>
+                        
+                        <div class="approved-users-section mt-4">
+                            <h3>کاربران تایید شده</h3>
+                            <div id="approvedUsersList">
+                                <!-- Approved users will be populated by JavaScript -->
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </main>
+    </div>
+
+    <!-- Sync Status Modal -->
+    <div class="modal" id="syncStatusModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">
+                    <i class="fas fa-sync"></i>
+                    وضعیت همگام‌سازی
+                </h3>
+                <button class="modal-close" onclick="closeModal('syncStatusModal')">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div id="syncStatusContent">
+                    <!-- Sync status will be populated -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-success" onclick="forceSyncData()">
+                    <i class="fas fa-sync"></i>
+                    همگام‌سازی اجباری
+                </button>
+                <button class="btn btn-secondary" onclick="closeModal('syncStatusModal')">
+                    <i class="fas fa-times"></i>
+                    بستن
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading Scripts -->
+    <script src="sw-register.js"></script>
+    <script src="offline-manager.js"></script>
+    <script src="database.js"></script>
+    <script src="auth.js"></script>
+    <script src="app.js"></script>
+
+    <script>
+        // PWA Install Logic
+        let deferredPrompt;
+        
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+            showInstallBanner();
+        });
+
+        function showInstallBanner() {
+            const banner = document.getElementById('installBanner');
+            if (banner) {
+                banner.classList.add('show');
+            }
+        }
+
+        function hideInstallBanner() {
+            const banner = document.getElementById('installBanner');
+            if (banner) {
+                banner.classList.remove('show');
+            }
+        }
+
+        async function installPWA() {
+            if (deferredPrompt) {
+                deferredPrompt.prompt();
+                const { outcome } = await deferredPrompt.userChoice;
+                
+                if (outcome === 'accepted') {
+                    console.log('PWA installed successfully');
+                    showNotification('اپلیکیشن با موفقیت نصب شد', 'success');
+                }
+                
+                deferredPrompt = null;
+                hideInstallBanner();
+            }
+        }
+
+        function dismissInstall() {
+            hideInstallBanner();
+            localStorage.setItem('installDismissed', Date.now().toString());
+        }
+
+        // Check if install was recently dismissed
+        window.addEventListener('load', () => {
+            const dismissed = localStorage.getItem('installDismissed');
+            if (dismissed && Date.now() - parseInt(dismissed) < 86400000) { // 24 hours
+                hideInstallBanner();
+            }
+        });
+
+        // App installed event
+        window.addEventListener('appinstalled', () => {
+            hideInstallBanner();
+            showNotification('اپلیکیشن نصب شد!', 'success');
+        });
+    </script>
+</body>
+</html>

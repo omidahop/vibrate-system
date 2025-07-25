@@ -1,0 +1,2 @@
+/*    /index.html   200
+/offline   /offline.html   200
